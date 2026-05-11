@@ -420,6 +420,10 @@ function renderServer() {
   if (diskSubEl) {
     diskSubEl.textContent = `${s.disk_used} GB / ${s.disk_total} GB used`;
   }
+  const serverTimeEl = document.getElementById("server-time");
+  if (serverTimeEl && s.server_time) {
+    serverTimeEl.textContent = s.server_time;
+  }
 }
 
 function renderServices() {
