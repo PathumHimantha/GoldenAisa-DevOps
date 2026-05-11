@@ -643,3 +643,115 @@ function renderHealthBadge() {
     if (label) label.textContent = "All Systems Healthy";
   }
 }
+
+// Add this after your other API functions
+async function restartBackend() {
+  const btn = document.getElementById("restart-backend-btn");
+  const statusDiv = document.getElementById("restart-status");
+
+  if (!btn) return;
+
+  // Disable button and show loading
+  const originalText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML =
+    '<i class="ti ti-loader" aria-hidden="true"></i> Restarting...';
+
+  if (statusDiv) {
+    statusDiv.innerHTML =
+      '<span style="color: var(--amber);">⏳ Restarting backend...</span>';
+  }
+
+  try {
+    const response = await fetch(`${API_BASE}/restart-backend`, {
+      method: "POST",
+      headers: {
+        "x-monitor-token": API_TOKEN,
+        "Content-Type": "application/json",
+      },
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      if (statusDiv) {
+        statusDiv.innerHTML =
+          '<span style="color: var(--green);">✅ Backend restarted successfully!</span>';
+      }
+
+      // Show success message in alerts
+      showTemporaryAlert("Backend restarted successfully", "alert-ok");
+
+      // Wait 3 seconds then refresh all data
+      setTimeout(() => {
+        refresh();
+        // Clear success message after 5 seconds
+        setTimeout(() => {
+          if (statusDiv) statusDiv.innerHTML = "";
+        }, 5000);
+      }, 3000);
+    } else {
+      throw new Error(result.error || "Restart failed");
+    }
+  } catch (err) {
+    console.error("Restart error:", err);
+    if (statusDiv) {
+      statusDiv.innerHTML = `<span style="color: var(--red);">❌ Restart failed: ${err.message}</span>`;
+    }
+    showTemporaryAlert(
+      "Failed to restart backend: " + err.message,
+      "alert-err",
+    );
+  } finally {
+    // Re-enable button
+    btn.disabled = false;
+    btn.innerHTML = originalText;
+  }
+}
+
+// Helper function to show temporary alerts
+function showTemporaryAlert(message, type) {
+  const alertsDiv = document.getElementById("alerts-section");
+  if (!alertsDiv) return;
+
+  const alertHtml = `<div class="alert-banner ${type}" style="margin-bottom: 8px;" id="temp-alert">
+    <i class="ti ti-${type === "alert-ok" ? "circle-check" : "alert-triangle"}" aria-hidden="true"></i> 
+    ${message}
+  </div>`;
+
+  // Insert at the top
+  alertsDiv.insertAdjacentHTML("afterbegin", alertHtml);
+
+  // Remove after 5 seconds
+  setTimeout(() => {
+    const tempAlert = document.getElementById("temp-alert");
+    if (tempAlert) tempAlert.remove();
+  }, 5000);
+}
+
+// Optional: Add function to check backend status
+async function checkBackendStatus() {
+  try {
+    const response = await fetch(`${API_BASE}/pm2-status`, {
+      headers: { "x-monitor-token": API_TOKEN },
+    });
+    const status = await response.json();
+
+    const restartDiv = document.getElementById("restart-status");
+    if (restartDiv && status.status) {
+      const statusMsg = document.createElement("div");
+      statusMsg.style.fontSize = "11px";
+      statusMsg.style.marginTop = "4px";
+      statusMsg.style.color = "var(--text3)";
+      statusMsg.innerHTML = `🟢 Backend has been running for ${status.uptime} | Restarts: ${status.restarts}`;
+
+      // Only add if not already there
+      if (!restartDiv.querySelector(".status-indicator")) {
+        statusMsg.className = "status-indicator";
+        restartDiv.appendChild(statusMsg);
+      }
+    }
+  } catch (err) {
+    console.log("Could not fetch backend status");
+  }
+}

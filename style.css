@@ -546,3 +546,32 @@ body {
     display: none;
   }
 }
+.restart-btn {
+  background: #dc2626;
+  border: none;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.restart-btn:hover {
+  background: #b91c1c;
+  transform: translateY(-1px);
+}
+
+.restart-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.restart-btn i {
+  font-size: 14px;
+}
