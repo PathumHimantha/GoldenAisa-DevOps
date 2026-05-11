@@ -52,6 +52,10 @@ const fetchAll = async () => {
     packet_loss: server.packet_loss || "0%",
     rx: server.rx || "—",
     tx: server.tx || "—",
+    server_time: server.server_time || "—",
+    server_time_iso: server.server_time_iso || "—",
+    server_timestamp: server.server_timestamp || 0,
+    timezone: server.timezone || "UTC",
   };
 
   // ── normalise services list ───────────────────────────────
