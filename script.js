@@ -39,14 +39,19 @@ const fetchAll = async () => {
 
   // ── normalise server ──────────────────────────────────────
   const serverNorm = {
-    uptime: server.uptime,
-    uptime_since: server.uptime_since,
-    cpu: server.cpu,
-    load: server.load,
-    ram_used: server.ram_used,
-    ram_total: server.ram_total,
-    disk_used: server.disk_used,
-    disk_total: server.disk_total,
+    uptime: server.uptime || "—",
+    uptime_since: server.uptime_since || "—",
+    cpu: server.cpu || 0,
+    load: server.load || [0, 0, 0],
+    ram_used: server.ram_used || 0,
+    ram_total: server.ram_total || 0,
+    disk_used: server.disk_used || 0,
+    disk_total: server.disk_total || 0,
+    response_ms: server.response_ms || 0,
+    ping_ms: server.ping_ms || 0,
+    packet_loss: server.packet_loss || "0%",
+    rx: server.rx || "—",
+    tx: server.tx || "—",
   };
 
   // ── normalise services list ───────────────────────────────
@@ -75,10 +80,10 @@ const fetchAll = async () => {
   // ── normalise node health (from /services node_process) ──
   const np = services.node_process || {};
   const nodeNorm = {
-    status: "ok",
+    status: np.pid ? "ok" : "unknown",
     db: mysql.status === "running" ? "connected" : "error",
     uptime: np.uptime_sec ? fmtUptime(np.uptime_sec) : "—",
-    version: process?.version || "—",
+    version: "Node.js " + (process?.version || "—"),
     response_ms: server.response_ms || 0,
     memory_mb: np.heap_used || np.rss_mb || 0,
   };
@@ -89,11 +94,12 @@ const fetchAll = async () => {
     0,
   );
   const mysqlNorm = {
-    status: mysql.status,
-    connections: mysql.connections,
-    slow_queries: mysql.slow_queries,
+    status: mysql.status || "unknown",
+    connections: mysql.connections || 0,
+    slow_queries: mysql.slow_queries || 0,
     db_size_mb: Math.round(totalMB),
-    last_backup: mysql.last_backup || "Unknown",
+    last_backup: mysql.last_backup || "Never",
+    backup_exists: mysql.backup_exists || false,
   };
 
   // ── normalise network (from server endpoint) ──────────────
@@ -108,28 +114,30 @@ const fetchAll = async () => {
   const sslList = (ssl.domains || []).map((d) => ({
     domain: d.domain,
     days: d.days ?? 0,
-    valid: d.valid,
+    valid: d.valid || false,
+    http_code: d.http_code || 0,
+    http_redirect: d.http_redirect || false,
   }));
 
   // ── normalise domains (reuse ssl data) ───────────────────
   const domainList = (ssl.domains || []).map((d) => ({
     url: d.domain,
     status: d.http_code || 200,
-    ok: d.http_redirect !== false && d.valid,
+    ok: d.http_redirect === true,
   }));
 
   // ── normalise cron ────────────────────────────────────────
   const cronList = (cron.jobs || []).map((j) => ({
     name: j.name,
     last: j.last_run ? new Date(j.last_run).toLocaleString("en-GB") : "Never",
-    status: j.status,
+    status: j.status || "unknown",
     duration: j.duration || "—",
   }));
 
   // ── normalise security ────────────────────────────────────
   const sec = security;
   const secNorm = {
-    ufw: sec.ufw?.status || "unknown",
+    ufw: sec.ufw?.status || "inactive",
     ssh_fails: sec.ssh?.failed_logins_24h || 0,
     sessions: sec.sessions?.count || 0,
     backup_date: mysql.last_backup ? mysql.last_backup.split(" ")[0] : "—",
@@ -175,6 +183,7 @@ const REFRESH_SEC = 60;
 
 function startTimer() {
   const bar = document.getElementById("timer-bar");
+  if (!bar) return;
   bar.style.transition = "none";
   bar.style.width = "100%";
   setTimeout(() => {
@@ -200,7 +209,6 @@ function doLogin() {
   const u = document.getElementById("u").value.trim();
   const p = document.getElementById("p").value;
   if (CREDS[u] === p) {
-    // Store token entered during login (or use hardcoded API_TOKEN above)
     const tokenInput = document.getElementById("token-input");
     if (tokenInput?.value)
       sessionStorage.setItem("monitor_token", tokenInput.value);
@@ -241,13 +249,15 @@ async function renderAll() {
     LIVE = await fetchAll();
     showLoadingState(false);
   } catch (err) {
+    console.error("API Error:", err);
     showError("API unreachable — " + err.message);
     showLoadingState(false);
     return;
   }
 
-  document.getElementById("last-updated").textContent =
-    "Updated " + new Date().toLocaleTimeString();
+  const updatedEl = document.getElementById("last-updated");
+  if (updatedEl)
+    updatedEl.textContent = "Updated " + new Date().toLocaleTimeString();
 
   renderAlerts();
   renderServer();
@@ -266,19 +276,23 @@ async function renderAll() {
 
 function showLoadingState(on) {
   const el = document.getElementById("alerts-section");
+  if (!el) return;
   if (on)
     el.innerHTML = `<div class="alert-banner alert-ok" style="opacity:0.5"><i class="ti ti-loader" aria-hidden="true"></i> Fetching live data...</div>`;
 }
 
 function showError(msg) {
-  document.getElementById("alerts-section").innerHTML =
-    `<div class="alert-banner alert-err"><i class="ti ti-alert-triangle" aria-hidden="true"></i> ${msg}</div>`;
+  const el = document.getElementById("alerts-section");
+  if (el) {
+    el.innerHTML = `<div class="alert-banner alert-err"><i class="ti ti-alert-triangle" aria-hidden="true"></i> ${msg}</div>`;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
-// ALL RENDER FUNCTIONS  — identical to original, read from LIVE
+// ALL RENDER FUNCTIONS
 // ─────────────────────────────────────────────────────────────
 function pct(a, b) {
+  if (!b || b === 0) return 0;
   return Math.round((a / b) * 100);
 }
 function barClass(p) {
@@ -295,33 +309,38 @@ function pillClass(s) {
 function renderAlerts() {
   const d = LIVE;
   const alerts = [];
+
   if (d.server.cpu > 80)
     alerts.push({
       cls: "alert-err",
       msg: `CPU at ${d.server.cpu}% — exceeds 80% threshold`,
     });
+
   const ramPct = pct(d.server.ram_used, d.server.ram_total);
   if (ramPct > 85)
     alerts.push({
       cls: "alert-err",
       msg: `RAM at ${ramPct}% — exceeds 85% threshold`,
     });
+
   const diskPct = pct(d.server.disk_used, d.server.disk_total);
   const diskFree = Math.round(100 - diskPct);
-  if (diskFree < 15)
+  if (diskFree < 15 && diskFree > 0)
     alerts.push({ cls: "alert-warn", msg: `Disk only ${diskFree}% free` });
+
   d.ssl.forEach((s) => {
-    if (s.days < 15)
+    if (s.days > 0 && s.days < 15)
       alerts.push({
         cls: "alert-err",
         msg: `SSL expiring in ${s.days} days — ${s.domain}`,
       });
-    else if (s.days < 30)
+    else if (s.days > 0 && s.days < 30)
       alerts.push({
         cls: "alert-warn",
         msg: `SSL expires in ${s.days} days — ${s.domain}`,
       });
   });
+
   d.cron
     .filter((c) => c.status === "failed")
     .forEach((c) =>
@@ -334,6 +353,8 @@ function renderAlerts() {
     );
 
   const el = document.getElementById("alerts-section");
+  if (!el) return;
+
   if (alerts.length === 0) {
     el.innerHTML = `<div class="alert-banner alert-ok"><i class="ti ti-circle-check" aria-hidden="true"></i> No critical alerts — all systems operating normally</div>`;
     return;
@@ -348,33 +369,63 @@ function renderAlerts() {
 
 function renderServer() {
   const s = LIVE.server;
-  document.getElementById("uptime").textContent = s.uptime;
-  document.getElementById("uptime-sub").textContent = s.uptime_since;
+
+  const uptimeEl = document.getElementById("uptime");
+  if (uptimeEl) uptimeEl.textContent = s.uptime;
+
+  const uptimeSubEl = document.getElementById("uptime-sub");
+  if (uptimeSubEl) uptimeSubEl.textContent = s.uptime_since;
+
   const cp = s.cpu;
-  document.getElementById("cpu-val").textContent = cp + "%";
+  const cpuValEl = document.getElementById("cpu-val");
+  if (cpuValEl) cpuValEl.textContent = cp + "%";
+
   const cb = document.getElementById("cpu-bar");
-  cb.style.width = cp + "%";
-  cb.className = "progress-fill " + barClass(cp);
-  document.getElementById("cpu-load").textContent =
-    `Load: ${s.load[0]} / ${s.load[1]} / ${s.load[2]}`;
+  if (cb) {
+    cb.style.width = cp + "%";
+    cb.className = "progress-fill " + barClass(cp);
+  }
+
+  const cpuLoadEl = document.getElementById("cpu-load");
+  if (cpuLoadEl && s.load) {
+    cpuLoadEl.textContent = `Load: ${s.load[0]} / ${s.load[1]} / ${s.load[2]}`;
+  }
+
   const rp = pct(s.ram_used, s.ram_total);
-  document.getElementById("ram-val").textContent = rp + "%";
+  const ramValEl = document.getElementById("ram-val");
+  if (ramValEl) ramValEl.textContent = rp + "%";
+
   const rb = document.getElementById("ram-bar");
-  rb.style.width = rp + "%";
-  rb.className = "progress-fill " + barClass(rp);
-  document.getElementById("ram-sub").textContent =
-    `${s.ram_used} GB / ${s.ram_total} GB`;
+  if (rb) {
+    rb.style.width = rp + "%";
+    rb.className = "progress-fill " + barClass(rp);
+  }
+
+  const ramSubEl = document.getElementById("ram-sub");
+  if (ramSubEl) {
+    ramSubEl.textContent = `${s.ram_used} GB / ${s.ram_total} GB`;
+  }
+
   const dp = pct(s.disk_used, s.disk_total);
-  document.getElementById("disk-val").textContent = dp + "%";
+  const diskValEl = document.getElementById("disk-val");
+  if (diskValEl) diskValEl.textContent = dp + "%";
+
   const db2 = document.getElementById("disk-bar");
-  db2.style.width = dp + "%";
-  db2.className = "progress-fill " + barClass(dp);
-  document.getElementById("disk-sub").textContent =
-    `${s.disk_used} GB / ${s.disk_total} GB used`;
+  if (db2) {
+    db2.style.width = dp + "%";
+    db2.className = "progress-fill " + barClass(dp);
+  }
+
+  const diskSubEl = document.getElementById("disk-sub");
+  if (diskSubEl) {
+    diskSubEl.textContent = `${s.disk_used} GB / ${s.disk_total} GB used`;
+  }
 }
 
 function renderServices() {
-  document.getElementById("services-list").innerHTML = LIVE.services
+  const el = document.getElementById("services-list");
+  if (!el) return;
+  el.innerHTML = LIVE.services
     .map(
       (s) =>
         `<div class="service-row">
@@ -386,7 +437,9 @@ function renderServices() {
 }
 
 function renderPM2() {
-  document.getElementById("pm2-list").innerHTML = LIVE.pm2
+  const el = document.getElementById("pm2-list");
+  if (!el) return;
+  el.innerHTML = LIVE.pm2
     .map(
       (p) =>
         `<div class="service-row">
@@ -400,7 +453,9 @@ function renderPM2() {
 
 function renderNode() {
   const n = LIVE.node;
-  document.getElementById("node-health").innerHTML = `
+  const el = document.getElementById("node-health");
+  if (!el) return;
+  el.innerHTML = `
     <div class="service-row"><span class="service-name">Status</span><span class="status-pill ${n.status === "ok" ? "pill-green" : "pill-red"}">${n.status}</span></div>
     <div class="service-row"><span class="service-name">Database</span><span class="status-pill ${n.db === "connected" ? "pill-green" : "pill-red"}">${n.db}</span></div>
     <div class="service-row"><span class="service-name">Response time</span><span style="font-size:13px;color:${n.response_ms < 50 ? "var(--green)" : n.response_ms < 200 ? "var(--amber)" : "var(--red)"};">${n.response_ms} ms</span></div>
@@ -415,17 +470,21 @@ function renderMySQL() {
     m.db_size_mb > 1024
       ? (m.db_size_mb / 1024).toFixed(2) + " GB"
       : m.db_size_mb + " MB";
-  document.getElementById("mysql-health").innerHTML = `
+  const el = document.getElementById("mysql-health");
+  if (!el) return;
+  el.innerHTML = `
     <div class="service-row"><span class="service-name">Status</span><span class="status-pill pill-green">${m.status}</span></div>
     <div class="service-row"><span class="service-name">Connections</span><span style="font-size:13px;color:var(--text2);">${m.connections} active</span></div>
     <div class="service-row"><span class="service-name">Slow queries</span><span style="font-size:13px;color:${m.slow_queries > 0 ? "var(--amber)" : "var(--green)"};">${m.slow_queries}</span></div>
     <div class="service-row"><span class="service-name">DB size</span><span style="font-size:13px;color:var(--text2);">${sizeStr}</span></div>
-    <div class="service-row" style="border-bottom:none;"><span class="service-name">Last backup</span><span style="font-size:12px;color:var(--green);">${m.last_backup}</span></div>`;
+    <div class="service-row" style="border-bottom:none;"><span class="service-name">Last backup</span><span style="font-size:12px;color:${m.last_backup === "Never" ? "var(--red)" : "var(--green)"};">${m.last_backup}</span></div>`;
 }
 
 function renderNetwork() {
   const n = LIVE.network;
-  document.getElementById("network-health").innerHTML = `
+  const el = document.getElementById("network-health");
+  if (!el) return;
+  el.innerHTML = `
     <div class="service-row"><span class="service-name">Ping latency</span><span style="font-size:13px;color:${n.ping_ms < 20 ? "var(--green)" : "var(--amber)"};">${n.ping_ms} ms</span></div>
     <div class="service-row"><span class="service-name">Packet loss</span><span style="font-size:13px;color:${n.packet_loss === "0%" ? "var(--green)" : "var(--red)"};">${n.packet_loss}</span></div>
     <div class="service-row"><span class="service-name">Data in</span><span style="font-size:13px;color:var(--text2);">${n.rx}</span></div>
@@ -433,20 +492,28 @@ function renderNetwork() {
 }
 
 function renderSSL() {
-  document.getElementById("ssl-list").innerHTML = LIVE.ssl
+  const el = document.getElementById("ssl-list");
+  if (!el) return;
+  el.innerHTML = LIVE.ssl
     .map((s) => {
       const pillCls =
-        s.days < 15 ? "pill-red" : s.days < 30 ? "pill-amber" : "pill-green";
+        s.days > 0 && s.days < 15
+          ? "pill-red"
+          : s.days > 0 && s.days < 30
+            ? "pill-amber"
+            : "pill-green";
       return `<div class="ssl-item">
-      <div><div class="ssl-domain">${s.domain}</div><div style="font-size:11px;color:var(--text3);margin-top:2px;">${s.valid ? "✓ Valid certificate" : "✗ Invalid"}</div></div>
-      <span class="status-pill ${pillCls}" style="white-space:nowrap;">${s.days} days left</span>
+      <div><div class="ssl-domain">${s.domain}</div><div style="font-size:11px;color:var(--text3);margin-top:2px;">${s.valid ? "✓ Valid certificate" : "✗ Invalid / Error"}</div></div>
+      <span class="status-pill ${pillCls}" style="white-space:nowrap;">${s.days > 0 ? s.days + " days left" : "Expired/Error"}</span>
     </div>`;
     })
     .join("");
 }
 
 function renderDomains() {
-  document.getElementById("domain-list").innerHTML = LIVE.domains
+  const el = document.getElementById("domain-list");
+  if (!el) return;
+  el.innerHTML = LIVE.domains
     .map(
       (d) =>
         `<div class="ssl-item">
@@ -458,7 +525,9 @@ function renderDomains() {
 }
 
 function renderCron() {
-  document.getElementById("cron-list").innerHTML = LIVE.cron
+  const el = document.getElementById("cron-list");
+  if (!el) return;
+  el.innerHTML = LIVE.cron
     .map(
       (c) =>
         `<div class="cron-row">
@@ -473,75 +542,104 @@ function renderCron() {
 
 function renderSecurity() {
   const s = LIVE.security;
-  document.getElementById("ufw-val").textContent = s.ufw;
-  document.getElementById("ufw-val").style.color =
-    s.ufw === "active" ? "var(--green)" : "var(--red)";
-  document.getElementById("ssh-fail").textContent = s.ssh_fails;
-  document.getElementById("ssh-fail").style.color =
-    s.ssh_fails > 10
-      ? "var(--red)"
-      : s.ssh_fails > 0
-        ? "var(--amber)"
-        : "var(--green)";
-  document.getElementById("sessions-val").textContent = s.sessions;
-  document.getElementById("backup-val").textContent = s.backup_date;
-  document.getElementById("backup-sub").textContent = s.backup_file
-    ? "✓ Backup file verified"
-    : "✗ Backup missing";
-  document.getElementById("backup-sub").style.color = s.backup_file
-    ? "var(--green)"
-    : "var(--red)";
+
+  const ufwEl = document.getElementById("ufw-val");
+  if (ufwEl) {
+    ufwEl.textContent = s.ufw;
+    ufwEl.style.color = s.ufw === "active" ? "var(--green)" : "var(--red)";
+  }
+
+  const sshEl = document.getElementById("ssh-fail");
+  if (sshEl) {
+    sshEl.textContent = s.ssh_fails;
+    sshEl.style.color =
+      s.ssh_fails > 10
+        ? "var(--red)"
+        : s.ssh_fails > 0
+          ? "var(--amber)"
+          : "var(--green)";
+  }
+
+  const sessionsEl = document.getElementById("sessions-val");
+  if (sessionsEl) sessionsEl.textContent = s.sessions;
+
+  const backupValEl = document.getElementById("backup-val");
+  if (backupValEl) backupValEl.textContent = s.backup_date;
+
+  const backupSubEl = document.getElementById("backup-sub");
+  if (backupSubEl) {
+    backupSubEl.textContent = s.backup_file
+      ? "✓ Backup file verified"
+      : "✗ Backup missing";
+    backupSubEl.style.color = s.backup_file ? "var(--green)" : "var(--red)";
+  }
 }
 
-const LOG_KEYS = ["nginx", "node", "mysql", "php"];
+const LOG_KEYS = ["nginx", "mysql", "node", "php"];
 let activeLog = "nginx";
+
 function renderLogs() {
   const tabs = document.getElementById("log-tabs");
-  if (!tabs.children.length) {
+  if (tabs && !tabs.children.length) {
     tabs.innerHTML = LOG_KEYS.map(
       (k) =>
-        `<button class="log-tab ${k === activeLog ? "active" : ""}" onclick="switchLog('${k}')">${k}</button>`,
+        `<button class="log-tab ${k === activeLog ? "active" : ""}" onclick="switchLog('${k}')">${k.toUpperCase()}</button>`,
     ).join("");
   }
   showLog(activeLog);
 }
+
 function switchLog(k) {
   activeLog = k;
-  document
-    .querySelectorAll(".log-tab")
-    .forEach((t) => t.classList.toggle("active", t.textContent === k));
+  const tabs = document.querySelectorAll(".log-tab");
+  tabs.forEach((t) =>
+    t.classList.toggle("active", t.textContent.toLowerCase() === k),
+  );
   showLog(k);
 }
+
 function showLog(k) {
   const lines = LIVE?.logs?.[k] || [];
-  document.getElementById("log-output").innerHTML = lines
+  const el = document.getElementById("log-output");
+  if (!el) return;
+  el.innerHTML = lines
+    .slice(0, 50)
     .map(
       (l) =>
-        `<div class="log-line"><span class="log-ts">${l.ts}</span><span class="${"log-" + l.level}">${l.msg}</span></div>`,
+        `<div class="log-line"><span class="log-ts">${l.ts || "—"}</span><span class="log-${l.level || "info"}">${l.msg || JSON.stringify(l)}</span></div>`,
     )
     .join("");
+  if (lines.length === 0) {
+    el.innerHTML =
+      '<div class="log-line"><span class="log-info">No logs available</span></div>';
+  }
 }
 
 function renderHealthBadge() {
   const hasErr =
     LIVE.cron.some((c) => c.status === "failed") ||
     LIVE.pm2.some((p) => p.status === "stopped") ||
-    LIVE.ssl.some((s) => s.days < 15);
-  const hasWarn = LIVE.ssl.some((s) => s.days < 30) || LIVE.server.cpu > 60;
+    LIVE.ssl.some((s) => s.days > 0 && s.days < 15);
+  const hasWarn =
+    LIVE.ssl.some((s) => s.days > 0 && s.days < 30) || LIVE.server.cpu > 60;
+
   const badge = document.getElementById("health-badge");
   const pulse = document.getElementById("health-pulse");
   const label = document.getElementById("health-label");
+
+  if (!badge) return;
+
   if (hasErr) {
     badge.className = "health-score red";
-    pulse.className = "pulse pulse-red";
-    label.textContent = "Issues Detected";
+    if (pulse) pulse.className = "pulse pulse-red";
+    if (label) label.textContent = "Issues Detected";
   } else if (hasWarn) {
     badge.className = "health-score amber";
-    pulse.className = "pulse pulse-amber";
-    label.textContent = "Warning";
+    if (pulse) pulse.className = "pulse pulse-amber";
+    if (label) label.textContent = "Warning";
   } else {
     badge.className = "health-score green";
-    pulse.className = "pulse pulse-green";
-    label.textContent = "All Systems Healthy";
+    if (pulse) pulse.className = "pulse pulse-green";
+    if (label) label.textContent = "All Systems Healthy";
   }
 }
