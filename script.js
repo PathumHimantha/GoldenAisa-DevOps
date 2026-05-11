@@ -83,7 +83,7 @@ const fetchAll = async () => {
     status: np.pid ? "ok" : "unknown",
     db: mysql.status === "running" ? "connected" : "error",
     uptime: np.uptime_sec ? fmtUptime(np.uptime_sec) : "—",
-    version: "Node.js " + (process?.version || "—"),
+    version: "Node.js",
     response_ms: server.response_ms || 0,
     memory_mb: np.heap_used || np.rss_mb || 0,
   };
