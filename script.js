@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────
 // CONFIG  — edit these two values only
 // ─────────────────────────────────────────────────────────────
-const API_BASE = "https://application.goldenasia.lk/monitor-api";
+const API_BASE = "https://application.goldenasia.lk/api/monitor-api";
 const API_TOKEN =
   sessionStorage.getItem("monitor_token") ||
   "c1c02da65df7926806b18d9709e0f86fff3ffba55ea5808e9690f02868096c34";
