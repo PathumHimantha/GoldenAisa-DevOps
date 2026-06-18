@@ -285,36 +285,13 @@
         <!-- CRON -->
         <div class="section-title">Scheduler / cron jobs</div>
         <div class="card">
-          <div
-            style="
-              display: flex;
-              gap: 8px;
-              align-items: center;
-              padding-bottom: 10px;
-              border-bottom: 0.5px solid var(--border);
-              margin-bottom: 8px;
-              flex-wrap: wrap;
-            "
-          >
+          <div class="cron-filter-bar">
             <input
               type="date"
               id="cron-filter-date"
-              style="
-                padding: 6px 10px;
-                border-radius: 6px;
-                border: 1px solid var(--border);
-                font-size: 12px;
-              "
+              class="cron-filter-input"
             />
-            <select
-              id="cron-filter-month"
-              style="
-                padding: 6px 10px;
-                border-radius: 6px;
-                border: 1px solid var(--border);
-                font-size: 12px;
-              "
-            >
+            <select id="cron-filter-month" class="cron-filter-select">
               <option value="">All Months</option>
               <option value="1">Jan</option>
               <option value="2">Feb</option>
@@ -333,38 +310,17 @@
               type="number"
               id="cron-filter-year"
               placeholder="Year"
-              style="
-                padding: 6px 10px;
-                border-radius: 6px;
-                border: 1px solid var(--border);
-                font-size: 12px;
-                width: 80px;
-              "
+              class="cron-filter-input cron-filter-year"
             />
             <button
               onclick="applyCronFilter()"
-              style="
-                padding: 6px 14px;
-                border-radius: 6px;
-                border: none;
-                background: var(--blue);
-                color: white;
-                font-size: 12px;
-                cursor: pointer;
-              "
+              class="cron-filter-btn cron-filter-btn-primary"
             >
               Filter
             </button>
             <button
               onclick="clearCronFilter()"
-              style="
-                padding: 6px 14px;
-                border-radius: 6px;
-                border: 1px solid var(--border);
-                background: transparent;
-                font-size: 12px;
-                cursor: pointer;
-              "
+              class="cron-filter-btn cron-filter-btn-ghost"
             >
               Clear
             </button>

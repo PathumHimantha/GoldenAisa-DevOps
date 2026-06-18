@@ -24,6 +24,15 @@ function clearCronFilter() {
   refresh();
 }
 
+// ── Default cron date filter to today ───────────────────────
+function initCronFilterDefaults() {
+  const todayStr = new Date().toISOString().split("T")[0];
+  const dateInput = document.getElementById("cron-filter-date");
+  if (dateInput && !dateInput.value) {
+    dateInput.value = todayStr;
+    cronFilter.date = todayStr;
+  }
+}
 // ─────────────────────────────────────────────────────────────
 // API HELPER
 // ─────────────────────────────────────────────────────────────
@@ -241,6 +250,7 @@ function doLogin() {
 
     document.getElementById("login-screen").style.display = "none";
     document.getElementById("app").style.display = "block";
+    initCronFilterDefaults(); // ← add this
     renderAll();
     startTimer();
   } else {

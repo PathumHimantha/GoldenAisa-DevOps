@@ -575,3 +575,72 @@ body {
 .restart-btn i {
   font-size: 14px;
 }
+
+/* CRON FILTER BAR */
+.cron-filter-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding-bottom: 10px;
+  border-bottom: 0.5px solid var(--border);
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.cron-filter-input,
+.cron-filter-select {
+  background: var(--bg3);
+  border: 0.5px solid var(--border2);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 6px 10px;
+  font-size: 12px;
+  outline: none;
+  font-family: var(--font);
+}
+.cron-filter-input:focus,
+.cron-filter-select:focus {
+  border-color: var(--blue);
+}
+.cron-filter-year {
+  width: 80px;
+}
+.cron-filter-select {
+  cursor: pointer;
+}
+.cron-filter-btn {
+  padding: 6px 14px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  cursor: pointer;
+  font-family: var(--font);
+  font-weight: 500;
+}
+.cron-filter-btn-primary {
+  border: none;
+  background: var(--blue);
+  color: #fff;
+}
+.cron-filter-btn-primary:hover {
+  opacity: 0.9;
+}
+.cron-filter-btn-ghost {
+  border: 0.5px solid var(--border2);
+  background: transparent;
+  color: var(--text2);
+}
+.cron-filter-btn-ghost:hover {
+  color: var(--text);
+  border-color: var(--border2);
+}
+
+@media (max-width: 600px) {
+  .cron-filter-bar {
+    gap: 6px;
+  }
+  .cron-filter-input,
+  .cron-filter-select,
+  .cron-filter-btn {
+    font-size: 11px;
+    padding: 5px 8px;
+  }
+}
