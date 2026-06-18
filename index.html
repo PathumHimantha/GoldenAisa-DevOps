@@ -287,6 +287,90 @@
         <div class="card">
           <div
             style="
+              display: flex;
+              gap: 8px;
+              align-items: center;
+              padding-bottom: 10px;
+              border-bottom: 0.5px solid var(--border);
+              margin-bottom: 8px;
+              flex-wrap: wrap;
+            "
+          >
+            <input
+              type="date"
+              id="cron-filter-date"
+              style="
+                padding: 6px 10px;
+                border-radius: 6px;
+                border: 1px solid var(--border);
+                font-size: 12px;
+              "
+            />
+            <select
+              id="cron-filter-month"
+              style="
+                padding: 6px 10px;
+                border-radius: 6px;
+                border: 1px solid var(--border);
+                font-size: 12px;
+              "
+            >
+              <option value="">All Months</option>
+              <option value="1">Jan</option>
+              <option value="2">Feb</option>
+              <option value="3">Mar</option>
+              <option value="4">Apr</option>
+              <option value="5">May</option>
+              <option value="6">Jun</option>
+              <option value="7">Jul</option>
+              <option value="8">Aug</option>
+              <option value="9">Sep</option>
+              <option value="10">Oct</option>
+              <option value="11">Nov</option>
+              <option value="12">Dec</option>
+            </select>
+            <input
+              type="number"
+              id="cron-filter-year"
+              placeholder="Year"
+              style="
+                padding: 6px 10px;
+                border-radius: 6px;
+                border: 1px solid var(--border);
+                font-size: 12px;
+                width: 80px;
+              "
+            />
+            <button
+              onclick="applyCronFilter()"
+              style="
+                padding: 6px 14px;
+                border-radius: 6px;
+                border: none;
+                background: var(--blue);
+                color: white;
+                font-size: 12px;
+                cursor: pointer;
+              "
+            >
+              Filter
+            </button>
+            <button
+              onclick="clearCronFilter()"
+              style="
+                padding: 6px 14px;
+                border-radius: 6px;
+                border: 1px solid var(--border);
+                background: transparent;
+                font-size: 12px;
+                cursor: pointer;
+              "
+            >
+              Clear
+            </button>
+          </div>
+          <div
+            style="
               display: grid;
               grid-template-columns: 1fr auto auto auto;
               gap: 8px;

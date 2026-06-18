@@ -9,6 +9,21 @@ const API_TOKEN =
 // Login credentials (frontend-only gate; real security is the API token)
 const CREDS = { admin: "Golden@Monitor2026" };
 
+function applyCronFilter() {
+  cronFilter.date = document.getElementById("cron-filter-date").value;
+  cronFilter.month = document.getElementById("cron-filter-month").value;
+  cronFilter.year = document.getElementById("cron-filter-year").value;
+  refresh();
+}
+
+function clearCronFilter() {
+  cronFilter = { date: "", month: "", year: "" };
+  document.getElementById("cron-filter-date").value = "";
+  document.getElementById("cron-filter-month").value = "";
+  document.getElementById("cron-filter-year").value = "";
+  refresh();
+}
+
 // ─────────────────────────────────────────────────────────────
 // API HELPER
 // ─────────────────────────────────────────────────────────────
@@ -19,20 +34,26 @@ const apiFetch = async (endpoint) => {
   if (!res.ok) throw new Error(`${endpoint} → HTTP ${res.status}`);
   return res.json();
 };
-
+let cronFilter = { date: "", month: "", year: "" };
 // ─────────────────────────────────────────────────────────────
 // LIVE DATA  — fetched once per refresh cycle, stored here
 // ─────────────────────────────────────────────────────────────
 let LIVE = null;
 
 const fetchAll = async () => {
+  const cronParams = new URLSearchParams();
+  if (cronFilter.date) cronParams.set("date", cronFilter.date);
+  if (cronFilter.month) cronParams.set("month", cronFilter.month);
+  if (cronFilter.year) cronParams.set("year", cronFilter.year);
+  const cronQuery = cronParams.toString() ? `?${cronParams}` : "";
+
   const [server, services, ssl, mysql, cron, security, logs] =
     await Promise.all([
       apiFetch("/server"),
       apiFetch("/services"),
       apiFetch("/ssl"),
       apiFetch("/mysql"),
-      apiFetch("/cron"),
+      apiFetch(`/cron${cronQuery}`),
       apiFetch("/security"),
       apiFetch("/logs/all"),
     ]);
@@ -136,6 +157,7 @@ const fetchAll = async () => {
     last: j.last_run ? new Date(j.last_run).toLocaleString("en-GB") : "Never",
     status: j.status || "unknown",
     duration: j.duration || "—",
+    error: j.error || null,
   }));
 
   // ── normalise security ────────────────────────────────────
