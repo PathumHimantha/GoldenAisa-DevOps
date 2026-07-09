@@ -230,10 +230,9 @@
           </div>
         </div>
 
-        <!-- APPLICATION HEALTH - 3 CARDS IN GRID -->
+        <!-- NODE + DB -->
         <div class="section-title">Application health</div>
         <div class="grid-3">
-          <!-- Card 1: Node API -->
           <div class="card">
             <div class="card-header">
               <span class="card-label"
@@ -242,8 +241,6 @@
             </div>
             <div id="node-health"></div>
           </div>
-
-          <!-- Card 2: MySQL -->
           <div class="card">
             <div class="card-header">
               <span class="card-label"
@@ -252,8 +249,304 @@
             </div>
             <div id="mysql-health"></div>
           </div>
+          <!-- MYSQL CONNECTION MANAGEMENT -->
+          <div class="section-title">MySQL Connection Management</div>
+          <div class="card">
+            <div
+              class="card-header"
+              style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 10px;
+              "
+            >
+              <span class="card-label">
+                <i class="ti ti-plug-connected" aria-hidden="true"></i> Active
+                Connections
+              </span>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                <button
+                  onclick="refreshConnections()"
+                  class="cron-filter-btn cron-filter-btn-primary"
+                  style="padding: 4px 12px; font-size: 12px"
+                >
+                  <i class="ti ti-refresh"></i> Refresh
+                </button>
+                <button
+                  onclick="killAllIdleConnections()"
+                  class="cron-filter-btn"
+                  style="
+                    padding: 4px 12px;
+                    font-size: 12px;
+                    background: #dc2626;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                  "
+                >
+                  <i class="ti ti-player-stop"></i> Kill Idle All
+                </button>
+              </div>
+            </div>
 
-          <!-- Card 3: Network -->
+            <!-- Connection Stats -->
+            <div
+              style="
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+                gap: 12px;
+                margin-bottom: 16px;
+                padding: 12px;
+                background: var(--bg2);
+                border-radius: 8px;
+              "
+            >
+              <div>
+                <div style="font-size: 11px; color: var(--text3)">Total</div>
+                <div style="font-size: 18px; font-weight: 600" id="conn-total">
+                  0
+                </div>
+              </div>
+              <div>
+                <div style="font-size: 11px; color: var(--text3)">Active</div>
+                <div
+                  style="font-size: 18px; font-weight: 600; color: var(--green)"
+                  id="conn-active"
+                >
+                  0
+                </div>
+              </div>
+              <div>
+                <div style="font-size: 11px; color: var(--text3)">Idle</div>
+                <div
+                  style="font-size: 18px; font-weight: 600; color: var(--amber)"
+                  id="conn-idle"
+                >
+                  0
+                </div>
+              </div>
+              <div>
+                <div style="font-size: 11px; color: var(--text3)">
+                  Idle > 5min
+                </div>
+                <div
+                  style="font-size: 18px; font-weight: 600; color: var(--red)"
+                  id="conn-idle-long"
+                >
+                  0
+                </div>
+              </div>
+            </div>
+
+            <!-- Connection Table -->
+            <div style="overflow-x: auto">
+              <table
+                style="width: 100%; border-collapse: collapse; font-size: 13px"
+              >
+                <thead>
+                  <tr style="border-bottom: 1px solid var(--border)">
+                    <th
+                      style="
+                        text-align: left;
+                        padding: 8px 6px;
+                        font-weight: 500;
+                        color: var(--text3);
+                        font-size: 11px;
+                        text-transform: uppercase;
+                        letter-spacing: 0.05em;
+                      "
+                    >
+                      <input
+                        type="checkbox"
+                        id="select-all-connections"
+                        onchange="toggleAllConnections()"
+                        style="cursor: pointer"
+                      />
+                    </th>
+                    <th
+                      style="
+                        text-align: left;
+                        padding: 8px 6px;
+                        font-weight: 500;
+                        color: var(--text3);
+                        font-size: 11px;
+                        text-transform: uppercase;
+                        letter-spacing: 0.05em;
+                      "
+                    >
+                      ID
+                    </th>
+                    <th
+                      style="
+                        text-align: left;
+                        padding: 8px 6px;
+                        font-weight: 500;
+                        color: var(--text3);
+                        font-size: 11px;
+                        text-transform: uppercase;
+                        letter-spacing: 0.05em;
+                      "
+                    >
+                      User
+                    </th>
+                    <th
+                      style="
+                        text-align: left;
+                        padding: 8px 6px;
+                        font-weight: 500;
+                        color: var(--text3);
+                        font-size: 11px;
+                        text-transform: uppercase;
+                        letter-spacing: 0.05em;
+                      "
+                    >
+                      Host
+                    </th>
+                    <th
+                      style="
+                        text-align: left;
+                        padding: 8px 6px;
+                        font-weight: 500;
+                        color: var(--text3);
+                        font-size: 11px;
+                        text-transform: uppercase;
+                        letter-spacing: 0.05em;
+                      "
+                    >
+                      Database
+                    </th>
+                    <th
+                      style="
+                        text-align: left;
+                        padding: 8px 6px;
+                        font-weight: 500;
+                        color: var(--text3);
+                        font-size: 11px;
+                        text-transform: uppercase;
+                        letter-spacing: 0.05em;
+                      "
+                    >
+                      Command
+                    </th>
+                    <th
+                      style="
+                        text-align: left;
+                        padding: 8px 6px;
+                        font-weight: 500;
+                        color: var(--text3);
+                        font-size: 11px;
+                        text-transform: uppercase;
+                        letter-spacing: 0.05em;
+                      "
+                    >
+                      Idle (s)
+                    </th>
+                    <th
+                      style="
+                        text-align: left;
+                        padding: 8px 6px;
+                        font-weight: 500;
+                        color: var(--text3);
+                        font-size: 11px;
+                        text-transform: uppercase;
+                        letter-spacing: 0.05em;
+                      "
+                    >
+                      State
+                    </th>
+                    <th
+                      style="
+                        text-align: left;
+                        padding: 8px 6px;
+                        font-weight: 500;
+                        color: var(--text3);
+                        font-size: 11px;
+                        text-transform: uppercase;
+                        letter-spacing: 0.05em;
+                      "
+                    >
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody id="connections-table-body">
+                  <tr>
+                    <td
+                      colspan="9"
+                      style="
+                        text-align: center;
+                        padding: 20px;
+                        color: var(--text3);
+                      "
+                    >
+                      <i
+                        class="ti ti-loader"
+                        style="
+                          display: inline-block;
+                          animation: spin 1s linear infinite;
+                        "
+                      ></i>
+                      Loading connections...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Bulk Actions -->
+            <div
+              style="
+                display: flex;
+                gap: 10px;
+                margin-top: 12px;
+                padding-top: 12px;
+                border-top: 1px solid var(--border);
+                flex-wrap: wrap;
+                align-items: center;
+              "
+            >
+              <span style="font-size: 12px; color: var(--text3)"
+                >Selected: <span id="selected-count">0</span> connections</span
+              >
+              <button
+                onclick="killSelectedConnections()"
+                id="kill-selected-btn"
+                style="
+                  background: #dc2626;
+                  border: none;
+                  color: white;
+                  padding: 6px 16px;
+                  border-radius: 6px;
+                  cursor: pointer;
+                  font-size: 12px;
+                  display: none;
+                "
+              >
+                <i class="ti ti-player-stop"></i> Kill Selected
+              </button>
+              <button
+                onclick="refreshConnections()"
+                style="
+                  background: var(--bg2);
+                  border: 1px solid var(--border);
+                  color: var(--text2);
+                  padding: 6px 16px;
+                  border-radius: 6px;
+                  cursor: pointer;
+                  font-size: 12px;
+                "
+              >
+                <i class="ti ti-refresh"></i> Refresh
+              </button>
+              <div
+                id="connection-action-status"
+                style="font-size: 12px; color: var(--text3)"
+              ></div>
+            </div>
+          </div>
           <div class="card">
             <div class="card-header">
               <span class="card-label"
@@ -261,305 +554,6 @@
               >
             </div>
             <div id="network-health"></div>
-          </div>
-        </div>
-
-        <!-- MYSQL CONNECTION MANAGEMENT - FULL WIDTH CARD -->
-        <div class="section-title">MySQL Connection Management</div>
-        <div class="card">
-          <div
-            class="card-header"
-            style="
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              flex-wrap: wrap;
-              gap: 10px;
-            "
-          >
-            <span class="card-label">
-              <i class="ti ti-plug-connected" aria-hidden="true"></i> Active
-              Connections
-            </span>
-            <div style="display: flex; gap: 8px; flex-wrap: wrap">
-              <button
-                onclick="refreshConnections()"
-                class="cron-filter-btn cron-filter-btn-primary"
-                style="padding: 4px 12px; font-size: 12px"
-              >
-                <i class="ti ti-refresh"></i> Refresh
-              </button>
-              <button
-                onclick="killAllIdleConnections()"
-                class="cron-filter-btn"
-                style="
-                  padding: 4px 12px;
-                  font-size: 12px;
-                  background: #dc2626;
-                  color: white;
-                  border: none;
-                  border-radius: 6px;
-                  cursor: pointer;
-                "
-              >
-                <i class="ti ti-player-stop"></i> Kill Idle All
-              </button>
-            </div>
-          </div>
-
-          <!-- Connection Stats -->
-          <div
-            style="
-              display: grid;
-              grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-              gap: 12px;
-              margin-bottom: 16px;
-              padding: 12px;
-              background: var(--bg2);
-              border-radius: 8px;
-            "
-          >
-            <div>
-              <div style="font-size: 11px; color: var(--text3)">Total</div>
-              <div style="font-size: 18px; font-weight: 600" id="conn-total">
-                0
-              </div>
-            </div>
-            <div>
-              <div style="font-size: 11px; color: var(--text3)">Active</div>
-              <div
-                style="font-size: 18px; font-weight: 600; color: var(--green)"
-                id="conn-active"
-              >
-                0
-              </div>
-            </div>
-            <div>
-              <div style="font-size: 11px; color: var(--text3)">Idle</div>
-              <div
-                style="font-size: 18px; font-weight: 600; color: var(--amber)"
-                id="conn-idle"
-              >
-                0
-              </div>
-            </div>
-            <div>
-              <div style="font-size: 11px; color: var(--text3)">
-                Idle > 5min
-              </div>
-              <div
-                style="font-size: 18px; font-weight: 600; color: var(--red)"
-                id="conn-idle-long"
-              >
-                0
-              </div>
-            </div>
-          </div>
-
-          <!-- Connection Table -->
-          <div style="overflow-x: auto">
-            <table
-              style="width: 100%; border-collapse: collapse; font-size: 13px"
-            >
-              <thead>
-                <tr style="border-bottom: 1px solid var(--border)">
-                  <th
-                    style="
-                      text-align: left;
-                      padding: 8px 6px;
-                      font-weight: 500;
-                      color: var(--text3);
-                      font-size: 11px;
-                      text-transform: uppercase;
-                      letter-spacing: 0.05em;
-                    "
-                  >
-                    <input
-                      type="checkbox"
-                      id="select-all-connections"
-                      onchange="toggleAllConnections()"
-                      style="cursor: pointer"
-                    />
-                  </th>
-                  <th
-                    style="
-                      text-align: left;
-                      padding: 8px 6px;
-                      font-weight: 500;
-                      color: var(--text3);
-                      font-size: 11px;
-                      text-transform: uppercase;
-                      letter-spacing: 0.05em;
-                    "
-                  >
-                    ID
-                  </th>
-                  <th
-                    style="
-                      text-align: left;
-                      padding: 8px 6px;
-                      font-weight: 500;
-                      color: var(--text3);
-                      font-size: 11px;
-                      text-transform: uppercase;
-                      letter-spacing: 0.05em;
-                    "
-                  >
-                    User
-                  </th>
-                  <th
-                    style="
-                      text-align: left;
-                      padding: 8px 6px;
-                      font-weight: 500;
-                      color: var(--text3);
-                      font-size: 11px;
-                      text-transform: uppercase;
-                      letter-spacing: 0.05em;
-                    "
-                  >
-                    Host
-                  </th>
-                  <th
-                    style="
-                      text-align: left;
-                      padding: 8px 6px;
-                      font-weight: 500;
-                      color: var(--text3);
-                      font-size: 11px;
-                      text-transform: uppercase;
-                      letter-spacing: 0.05em;
-                    "
-                  >
-                    Database
-                  </th>
-                  <th
-                    style="
-                      text-align: left;
-                      padding: 8px 6px;
-                      font-weight: 500;
-                      color: var(--text3);
-                      font-size: 11px;
-                      text-transform: uppercase;
-                      letter-spacing: 0.05em;
-                    "
-                  >
-                    Command
-                  </th>
-                  <th
-                    style="
-                      text-align: left;
-                      padding: 8px 6px;
-                      font-weight: 500;
-                      color: var(--text3);
-                      font-size: 11px;
-                      text-transform: uppercase;
-                      letter-spacing: 0.05em;
-                    "
-                  >
-                    Idle (s)
-                  </th>
-                  <th
-                    style="
-                      text-align: left;
-                      padding: 8px 6px;
-                      font-weight: 500;
-                      color: var(--text3);
-                      font-size: 11px;
-                      text-transform: uppercase;
-                      letter-spacing: 0.05em;
-                    "
-                  >
-                    State
-                  </th>
-                  <th
-                    style="
-                      text-align: left;
-                      padding: 8px 6px;
-                      font-weight: 500;
-                      color: var(--text3);
-                      font-size: 11px;
-                      text-transform: uppercase;
-                      letter-spacing: 0.05em;
-                    "
-                  >
-                    Action
-                  </th>
-                </tr>
-              </thead>
-              <tbody id="connections-table-body">
-                <tr>
-                  <td
-                    colspan="9"
-                    style="
-                      text-align: center;
-                      padding: 20px;
-                      color: var(--text3);
-                    "
-                  >
-                    <i
-                      class="ti ti-loader"
-                      style="
-                        display: inline-block;
-                        animation: spin 1s linear infinite;
-                      "
-                    ></i>
-                    Loading connections...
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Bulk Actions -->
-          <div
-            style="
-              display: flex;
-              gap: 10px;
-              margin-top: 12px;
-              padding-top: 12px;
-              border-top: 1px solid var(--border);
-              flex-wrap: wrap;
-              align-items: center;
-            "
-          >
-            <span style="font-size: 12px; color: var(--text3)"
-              >Selected: <span id="selected-count">0</span> connections</span
-            >
-            <button
-              onclick="killSelectedConnections()"
-              id="kill-selected-btn"
-              style="
-                background: #dc2626;
-                border: none;
-                color: white;
-                padding: 6px 16px;
-                border-radius: 6px;
-                cursor: pointer;
-                font-size: 12px;
-                display: none;
-              "
-            >
-              <i class="ti ti-player-stop"></i> Kill Selected
-            </button>
-            <button
-              onclick="refreshConnections()"
-              style="
-                background: var(--bg2);
-                border: 1px solid var(--border);
-                color: var(--text2);
-                padding: 6px 16px;
-                border-radius: 6px;
-                cursor: pointer;
-                font-size: 12px;
-              "
-            >
-              <i class="ti ti-refresh"></i> Refresh
-            </button>
-            <div
-              id="connection-action-status"
-              style="font-size: 12px; color: var(--text3)"
-            ></div>
           </div>
         </div>
 
