@@ -284,6 +284,11 @@ async function renderAll() {
   try {
     LIVE = await fetchAll();
     showLoadingState(false);
+
+    // Refresh connections if the table exists
+    if (document.getElementById("connections-table-body")) {
+      await refreshConnections();
+    }
   } catch (err) {
     console.error("API Error:", err);
     showError("API unreachable — " + err.message);
@@ -795,3 +800,353 @@ async function checkBackendStatus() {
     console.log("Could not fetch backend status");
   }
 }
+// ─────────────────────────────────────────────────────────────
+// MySQL CONNECTION MANAGEMENT
+// ─────────────────────────────────────────────────────────────
+
+let currentConnections = [];
+let selectedConnections = new Set();
+
+// Refresh connections list
+async function refreshConnections() {
+  const tbody = document.getElementById("connections-table-body");
+  if (!tbody) return;
+
+  try {
+    // Show loading
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; padding: 20px; color: var(--text3);">
+      <i class="ti ti-loader" style="display: inline-block; animation: spin 1s linear infinite;"></i> Loading connections...
+    </td></tr>`;
+
+    // Fetch connection data
+    const data = await apiFetch("/mysql");
+
+    // Extract connections from the response
+    const connections =
+      data.connection_details?.connections || data.processlist || [];
+    currentConnections = connections;
+
+    // Update stats
+    const total = data.connection_details?.total || connections.length || 0;
+    const active =
+      data.connection_details?.active ||
+      connections.filter((c) => c.command !== "Sleep").length;
+    const idle =
+      data.connection_details?.idle ||
+      connections.filter((c) => c.command === "Sleep").length;
+    const idleLong =
+      data.connection_details?.problematic?.idle_too_long ||
+      connections.filter((c) => c.command === "Sleep" && c.seconds_idle > 300)
+        .length;
+
+    document.getElementById("conn-total").textContent = total;
+    document.getElementById("conn-active").textContent = active;
+    document.getElementById("conn-idle").textContent = idle;
+    document.getElementById("conn-idle-long").textContent = idleLong;
+
+    // Render table
+    renderConnectionsTable(connections);
+
+    // Clear selection
+    selectedConnections.clear();
+    updateSelectedCount();
+  } catch (err) {
+    console.error("Error loading connections:", err);
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; padding: 20px; color: var(--red);">
+      <i class="ti ti-alert-triangle"></i> Failed to load connections: ${err.message}
+    </td></tr>`;
+  }
+}
+
+// Render connections table
+function renderConnectionsTable(connections) {
+  const tbody = document.getElementById("connections-table-body");
+  if (!tbody) return;
+
+  if (!connections || connections.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; padding: 20px; color: var(--text3);">
+      No active connections found
+    </td></tr>`;
+    return;
+  }
+
+  // Sort: active connections first, then idle by duration
+  const sorted = [...connections].sort((a, b) => {
+    if (a.command === "Sleep" && b.command !== "Sleep") return 1;
+    if (a.command !== "Sleep" && b.command === "Sleep") return -1;
+    return (b.seconds_idle || 0) - (a.seconds_idle || 0);
+  });
+
+  tbody.innerHTML = sorted
+    .map((conn) => {
+      const isIdle = conn.command === "Sleep";
+      const isIdleLong = isIdle && (conn.seconds_idle || 0) > 300;
+      const isActive = !isIdle;
+
+      // Determine status badge
+      let badgeClass = "badge-sleep";
+      let badgeText = "Sleep";
+      if (isActive) {
+        badgeClass = "badge-active";
+        badgeText = "Active";
+      } else if (isIdleLong) {
+        badgeClass = "badge-warning";
+        badgeText = "Idle Long";
+      } else if (isIdle) {
+        badgeClass = "badge-idle";
+        badgeText = "Idle";
+      }
+
+      const threadId = conn.thread_id || conn.id;
+      const isSelected = selectedConnections.has(threadId);
+
+      // Truncate query if exists
+      const queryPreview = conn.current_query || conn.info || "";
+      const truncatedQuery =
+        queryPreview.length > 50
+          ? queryPreview.substring(0, 50) + "..."
+          : queryPreview;
+
+      return `<tr>
+      <td>
+        <input type="checkbox" class="conn-checkbox" data-id="${threadId}" 
+               ${isSelected ? "checked" : ""} 
+               onchange="toggleConnection(${threadId})">
+      </td>
+      <td style="font-weight: 500; font-size: 12px;">${threadId}</td>
+      <td>${conn.user || "unknown"}</td>
+      <td style="font-size: 12px; color: var(--text2);">${conn.host_clean || conn.host || "—"}</td>
+      <td style="font-size: 12px;">${conn.database_name || conn.db || "—"}</td>
+      <td><span class="connection-status-badge ${badgeClass}">${badgeText}</span></td>
+      <td style="${isIdleLong ? "color: var(--red); font-weight: 600;" : ""}">
+        ${conn.seconds_idle || conn.time || 0}s
+        ${isIdleLong ? "⚠️" : ""}
+      </td>
+      <td style="font-size: 11px; color: var(--text2); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+        ${conn.state || "—"}
+        ${truncatedQuery ? `<div style="font-size: 10px; color: var(--text3); margin-top: 2px;">${truncatedQuery}</div>` : ""}
+      </td>
+      <td>
+        <button class="kill-btn" onclick="killConnection(${threadId})" 
+                ${isActive ? 'style="border-color: var(--amber); color: var(--amber);"' : ""}>
+          <i class="ti ti-player-stop" style="font-size: 12px;"></i> Kill
+        </button>
+      </td>
+    </tr>`;
+    })
+    .join("");
+}
+
+// Toggle individual connection selection
+function toggleConnection(id) {
+  if (selectedConnections.has(id)) {
+    selectedConnections.delete(id);
+  } else {
+    selectedConnections.add(id);
+  }
+  updateSelectedCount();
+}
+
+// Toggle all connections
+function toggleAllConnections() {
+  const checkbox = document.getElementById("select-all-connections");
+  const allCheckboxes = document.querySelectorAll(".conn-checkbox");
+
+  if (checkbox.checked) {
+    allCheckboxes.forEach((cb) => {
+      const id = parseInt(cb.dataset.id);
+      selectedConnections.add(id);
+      cb.checked = true;
+    });
+  } else {
+    selectedConnections.clear();
+    allCheckboxes.forEach((cb) => {
+      cb.checked = false;
+    });
+  }
+  updateSelectedCount();
+}
+
+// Update selected count and show/hide kill button
+function updateSelectedCount() {
+  const count = selectedConnections.size;
+  document.getElementById("selected-count").textContent = count;
+  const killBtn = document.getElementById("kill-selected-btn");
+  if (count > 0) {
+    killBtn.style.display = "inline-block";
+  } else {
+    killBtn.style.display = "none";
+  }
+}
+
+// Kill a single connection
+async function killConnection(threadId) {
+  if (!confirm(`Are you sure you want to kill connection ${threadId}?`)) {
+    return;
+  }
+
+  const statusDiv = document.getElementById("connection-action-status");
+  statusDiv.innerHTML = `<span style="color: var(--amber);">⏳ Killing connection ${threadId}...</span>`;
+
+  try {
+    const response = await fetch(`${API_BASE}/mysql/kill-connection`, {
+      method: "POST",
+      headers: {
+        "x-monitor-token": API_TOKEN,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        thread_id: threadId,
+        reason: "Manual kill from DevOps panel",
+      }),
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      statusDiv.innerHTML = `<span style="color: var(--green);">✅ ${result.message}</span>`;
+      // Refresh the list after 1 second
+      setTimeout(refreshConnections, 1000);
+    } else {
+      throw new Error(
+        result.error || result.detail || "Failed to kill connection",
+      );
+    }
+  } catch (err) {
+    statusDiv.innerHTML = `<span style="color: var(--red);">❌ ${err.message}</span>`;
+  }
+}
+
+// Kill selected connections
+async function killSelectedConnections() {
+  const count = selectedConnections.size;
+  if (count === 0) return;
+
+  if (
+    !confirm(`Are you sure you want to kill ${count} selected connection(s)?`)
+  ) {
+    return;
+  }
+
+  const statusDiv = document.getElementById("connection-action-status");
+  statusDiv.innerHTML = `<span style="color: var(--amber);">⏳ Killing ${count} connections...</span>`;
+
+  let successCount = 0;
+  let failCount = 0;
+
+  // Kill each connection
+  for (const threadId of selectedConnections) {
+    try {
+      const response = await fetch(`${API_BASE}/mysql/kill-connection`, {
+        method: "POST",
+        headers: {
+          "x-monitor-token": API_TOKEN,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          thread_id: threadId,
+          reason: "Bulk kill from DevOps panel",
+        }),
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        successCount++;
+      } else {
+        failCount++;
+      }
+    } catch (err) {
+      failCount++;
+    }
+  }
+
+  // Clear selection
+  selectedConnections.clear();
+  updateSelectedCount();
+
+  statusDiv.innerHTML = `
+    <span style="color: var(--green);">✅ Killed ${successCount} connections</span>
+    ${failCount > 0 ? `<span style="color: var(--red);">⚠️ Failed: ${failCount}</span>` : ""}
+  `;
+
+  // Refresh after 1 second
+  setTimeout(refreshConnections, 1000);
+}
+
+// Kill all idle connections
+async function killAllIdleConnections() {
+  if (
+    !confirm(
+      "This will kill ALL idle connections (sleeping > 5 minutes). Are you sure?",
+    )
+  ) {
+    return;
+  }
+
+  const statusDiv = document.getElementById("connection-action-status");
+  statusDiv.innerHTML = `<span style="color: var(--amber);">⏳ Killing all idle connections...</span>`;
+
+  try {
+    const response = await fetch(`${API_BASE}/mysql/kill-idle-connections`, {
+      method: "POST",
+      headers: {
+        "x-monitor-token": API_TOKEN,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        max_idle_seconds: 300,
+        confirm: true,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      statusDiv.innerHTML = `
+        <span style="color: var(--green);">✅ ${result.message}</span>
+        ${result.killed_count ? ` (${result.killed_count} killed)` : ""}
+      `;
+      setTimeout(refreshConnections, 1000);
+    } else {
+      throw new Error(result.error || "Failed to kill idle connections");
+    }
+  } catch (err) {
+    statusDiv.innerHTML = `<span style="color: var(--red);">❌ ${err.message}</span>`;
+  }
+}
+
+// Auto-refresh connections every 30 seconds
+let connectionRefreshInterval = null;
+
+function startConnectionAutoRefresh() {
+  if (connectionRefreshInterval) {
+    clearInterval(connectionRefreshInterval);
+  }
+  connectionRefreshInterval = setInterval(() => {
+    // Only refresh if the connections table is visible
+    const table = document.getElementById("connections-table-body");
+    if (table && table.offsetParent !== null) {
+      refreshConnections();
+    }
+  }, 30000);
+}
+
+// Call this in your main render function or when the page loads
+function initConnectionManagement() {
+  // Wait for DOM to load
+  setTimeout(() => {
+    refreshConnections();
+    startConnectionAutoRefresh();
+  }, 1000);
+}
+
+// Add to your existing renderAll function
+// Find this line: LIVE = await fetchAll();
+// After it, add:
+// await refreshConnections();
+
+// Or if you want to keep it separate, call init when the page loads
+document.addEventListener("DOMContentLoaded", () => {
+  // ... existing code ...
+  initConnectionManagement();
+});
